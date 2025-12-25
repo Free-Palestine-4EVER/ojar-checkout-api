@@ -24,20 +24,53 @@ const CURRENCY_CONFIG = {
     'BHD': { symbol: 'BHD', multiplier: 1000 }, // BHD uses 3 decimal places
 };
 
-// ALL countries supported by Stripe for shipping (official Stripe list)
-const ALL_SHIPPING_COUNTRIES = [
-    'AC', 'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AT', 'AU', 'AW', 'AX', 'AZ',
-    'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BV', 'BW', 'BY', 'BZ',
-    'CA', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN', 'CO', 'CR', 'CV', 'CW', 'CY', 'CZ',
-    'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ', 'EC', 'EE', 'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FJ', 'FK', 'FO', 'FR',
-    'GA', 'GB', 'GD', 'GE', 'GF', 'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS', 'GT', 'GU', 'GW', 'GY',
-    'HK', 'HN', 'HR', 'HT', 'HU', 'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IS', 'IT', 'JE', 'JM', 'JO', 'JP',
-    'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KR', 'KW', 'KY', 'KZ', 'LA', 'LB', 'LC', 'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY',
-    'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MK', 'ML', 'MM', 'MN', 'MO', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ',
-    'NA', 'NC', 'NE', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ', 'OM', 'PA', 'PE', 'PF', 'PG', 'PH', 'PK', 'PL', 'PM', 'PN', 'PR', 'PS', 'PT', 'PY',
-    'QA', 'RE', 'RO', 'RS', 'RU', 'RW', 'SA', 'SB', 'SC', 'SD', 'SE', 'SG', 'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SX', 'SZ',
-    'TA', 'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW', 'TZ',
-    'UA', 'UG', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VG', 'VN', 'VU', 'WF', 'WS', 'XK', 'YE', 'YT', 'ZA', 'ZM', 'ZW', 'ZZ'
+// OJAR delivery countries only (43 countries from shipping spreadsheet)
+const ALLOWED_SHIPPING_COUNTRIES = [
+    // GCC / Middle East
+    'AE', // UAE
+    'SA', // Saudi Arabia
+    'KW', // Kuwait
+    'BH', // Bahrain
+    'OM', // Oman
+    'QA', // Qatar
+    'LB', // Lebanon
+    // Europe
+    'GB', // United Kingdom
+    'DE', // Germany
+    'FR', // France
+    'IT', // Italy
+    'ES', // Spain
+    'NL', // Netherlands
+    'BE', // Belgium
+    'AT', // Austria
+    'CH', // Switzerland
+    'PT', // Portugal
+    'IE', // Ireland
+    'PL', // Poland
+    'GR', // Greece
+    'SE', // Sweden
+    'DK', // Denmark
+    'FI', // Finland
+    'NO', // Norway
+    'CZ', // Czech Republic
+    'HU', // Hungary
+    'RO', // Romania
+    'BG', // Bulgaria
+    'HR', // Croatia
+    'SI', // Slovenia
+    'EE', // Estonia
+    'CY', // Cyprus
+    'MT', // Malta
+    'LU', // Luxembourg
+    'AD', // Andorra
+    'MC', // Monaco
+    'LI', // Liechtenstein
+    'AL', // Albania
+    'BA', // Bosnia and Herzegovina
+    'ME', // Montenegro
+    'RS', // Serbia
+    // USA
+    'US', // United States
 ];
 
 module.exports = async function handler(req, res) {
@@ -154,9 +187,9 @@ module.exports = async function handler(req, res) {
                 enabled: true,
             },
 
-            // UPDATED: Allow ALL countries for shipping
+            // UPDATED: Allow only OJAR delivery countries for shipping
             shipping_address_collection: {
-                allowed_countries: ALL_SHIPPING_COUNTRIES,
+                allowed_countries: ALLOWED_SHIPPING_COUNTRIES,
             },
 
             metadata: {

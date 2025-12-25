@@ -27,8 +27,11 @@ async function createShopifyOrder(orderData) {
             financial_status: 'paid',
             send_receipt: true,
             send_fulfillment_receipt: true,
-            note: `Stripe Payment ID: ${stripePaymentIntentId}`,
-            tags: 'stripe-checkout, multi-currency',
+            note: '',  // Reserved for customer notes only
+            note_attributes: [
+                { name: 'stripe_payment_id', value: stripePaymentIntentId }
+            ],
+            tags: `stripe-checkout, multi-currency, stripe:${stripePaymentIntentId}`,
             currency: currency,
             line_items: lineItems.map(item => ({
                 variant_id: item.variantId,

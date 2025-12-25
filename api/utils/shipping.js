@@ -70,34 +70,36 @@ const SHIPPING_ZONES = {
 };
 
 // Currency-specific shipping costs (in smallest unit - cents/pence/etc)
-// Based on USD rates, converted approximately
+// Base rate: EUR 15 (converted to other currencies)
 const SHIPPING_BY_CURRENCY = {
-    'USD': { europe: 1000, uk: 2500, middleEast: 3400, usa: 5000, row: 5000 },
-    'EUR': { europe: 920, uk: 2300, middleEast: 3128, usa: 4600, row: 4600 },
-    'GBP': { europe: 790, uk: 1975, middleEast: 2686, usa: 3950, row: 3950 },
-    'SAR': { europe: 3750, uk: 9375, middleEast: 12750, usa: 18750, row: 18750 },
-    'AED': { europe: 3670, uk: 9175, middleEast: 12478, usa: 18350, row: 18350 },
-    'QAR': { europe: 3640, uk: 9100, middleEast: 12376, usa: 18200, row: 18200 },
-    'OMR': { europe: 385, uk: 963, middleEast: 1309, usa: 1925, row: 1925 },
-    'KWD': { europe: 307, uk: 768, middleEast: 1044, usa: 1535, row: 1535 },
-    'BHD': { europe: 377, uk: 943, middleEast: 1281, usa: 1885, row: 1885 },
+    'USD': { standard: 1650 },  // ~$16.50 (EUR 15 equivalent)
+    'EUR': { standard: 1500 },  // €15.00
+    'GBP': { standard: 1290 },  // ~£12.90
+    'SAR': { standard: 6190 },  // ~62 SAR
+    'AED': { standard: 6060 },  // ~61 AED
+    'QAR': { standard: 6010 },  // ~60 QAR
+    'OMR': { standard: 635 },   // ~6.35 OMR (3 decimals = 6350)
+    'KWD': { standard: 507 },   // ~5.07 KWD (3 decimals = 5070)
+    'BHD': { standard: 623 },   // ~6.23 BHD (3 decimals = 6230)
 };
 
-// Free shipping thresholds by currency (in smallest unit) - $230 USD equivalent
+// Free shipping thresholds by currency (in smallest unit) - EUR 200 equivalent
 const FREE_SHIPPING_THRESHOLD = {
-    'USD': 23000,   // $230
-    'EUR': 21160,   // €211.60
-    'GBP': 18170,   // £181.70
-    'SAR': 86250,   // 862.50 SAR
-    'AED': 84410,   // 844.10 AED
-    'QAR': 83720,   // 837.20 QAR
-    'OMR': 8855,    // 88.55 OMR (3 decimals)
-    'KWD': 7061,    // 70.61 KWD (3 decimals)
-    'BHD': 8671,    // 86.71 BHD (3 decimals)
+    'USD': 22000,   // $220 (EUR 200 equivalent)
+    'EUR': 20000,   // €200
+    'GBP': 17200,   // £172
+    'SAR': 82500,   // 825 SAR
+    'AED': 80800,   // 808 AED
+    'QAR': 80200,   // 802 QAR
+    'OMR': 8470,    // 84.70 OMR (3 decimals)
+    'KWD': 6760,    // 67.60 KWD (3 decimals)
+    'BHD': 8290,    // 82.90 BHD (3 decimals)
 };
 
 /**
  * Calculate shipping cost based on country, currency, and cart total
+ * SIMPLIFIED: EUR 15 flat rate for all destinations, free on EUR 200+
+ * UAE and Oman always free
  * @param {string} countryCode - ISO country code
  * @param {string} currency - Currency code (USD, EUR, etc.)
  * @param {number} cartTotal - Cart total in smallest currency unit (cents)
@@ -105,32 +107,21 @@ const FREE_SHIPPING_THRESHOLD = {
  */
 function calculateShipping(countryCode, currency, cartTotal) {
     const zone = SHIPPING_ZONES[countryCode] || SHIPPING_ZONES['DEFAULT'];
-    const currencyRates = SHIPPING_BY_CURRENCY[currency] || SHIPPING_BY_CURRENCY['USD'];
-    const freeThreshold = FREE_SHIPPING_THRESHOLD[currency] || FREE_SHIPPING_THRESHOLD['USD'];
+    const currencyRates = SHIPPING_BY_CURRENCY[currency] || SHIPPING_BY_CURRENCY['EUR'];
+    const freeThreshold = FREE_SHIPPING_THRESHOLD[currency] || FREE_SHIPPING_THRESHOLD['EUR'];
 
     // UAE and Oman - always free
     if (zone.zone === 'UAE' || zone.zone === 'OMAN') {
         return 0;
     }
 
-    // Free shipping over threshold
+    // Free shipping over threshold (EUR 200 equivalent)
     if (cartTotal >= freeThreshold) {
         return 0;
     }
 
-    // Return zone-specific rate
-    switch (zone.zone) {
-        case 'EUROPE':
-            return currencyRates.europe;
-        case 'UK':
-            return currencyRates.uk;
-        case 'MIDDLE_EAST':
-            return currencyRates.middleEast;
-        case 'USA':
-            return currencyRates.usa;
-        default:
-            return currencyRates.row;
-    }
+    // Return standard flat rate (EUR 15 equivalent)
+    return currencyRates.standard;
 }
 
 /**
