@@ -1,0 +1,14 @@
+{
+    "name": "ojar-checkout-api",
+    "version": "1.0.0",
+    "description": "Multi-currency Stripe checkout API for Ojar Shopify store",
+    "private": true,
+    "scripts": {
+        "dev": "vercel dev",
+        "deploy": "vercel --prod"
+    },
+    "dependencies": {
+        "stripe": "^14.10.0",
+        "@shopify/shopify-api": "^9.0.0"
+    }
+}
