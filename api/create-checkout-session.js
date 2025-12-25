@@ -178,7 +178,7 @@ module.exports = async function handler(req, res) {
             line_items: lineItems,
             mode: 'payment',
             success_url: `${process.env.SUCCESS_REDIRECT_URL || 'https://ojarofficial.com/pages/thank-you'}?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.CANCEL_REDIRECT_URL || 'https://ojarofficial.com/cart'}?cancelled=true&restore=${cartToken || ''}`,
+            cancel_url: `${process.env.CANCEL_REDIRECT_URL || 'https://ojarofficial.com'}`,
             customer_email: customerEmail || undefined,
             billing_address_collection: 'required',
 
