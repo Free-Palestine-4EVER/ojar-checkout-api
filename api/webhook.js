@@ -55,6 +55,10 @@ module.exports = async function handler(req, res) {
             await handleCheckoutComplete(event.data.object);
             break;
 
+        case 'checkout.session.expired':
+            await handleAbandonedCheckout(event.data.object);
+            break;
+
         case 'payment_intent.payment_failed':
             console.log('Payment failed:', event.data.object.id);
             break;
@@ -175,5 +179,94 @@ async function handleCheckoutComplete(session) {
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
         // Don't throw - we've already received payment, log for manual resolution
+    }
+}
+
+/**
+ * Handle abandoned checkout session - create Shopify draft order for recovery
+ */
+async function handleAbandonedCheckout(session) {
+    console.log('=== WEBHOOK: Processing abandoned checkout ===');
+    console.log('Session ID:', session.id);
+
+    try {
+        // Get full session details
+        const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+            expand: ['line_items', 'customer_details'],
+        });
+
+        const { customer_details, metadata } = fullSession;
+        const customerEmail = customer_details?.email;
+
+        if (!customerEmail) {
+            console.log('No customer email - cannot create abandoned cart recovery');
+            return;
+        }
+
+        // Parse cart items from metadata
+        let cartItems = [];
+        try {
+            cartItems = JSON.parse(metadata?.cart_items_json || '[]');
+        } catch (e) {
+            console.error('Failed to parse cart items:', e);
+            return;
+        }
+
+        if (cartItems.length === 0) {
+            console.log('No cart items in abandoned checkout');
+            return;
+        }
+
+        console.log('Abandoned checkout by:', customerEmail);
+        console.log('Items:', cartItems.length);
+
+        // Create a Shopify draft order for abandoned cart recovery
+        const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+        const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+        if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+            console.error('Shopify credentials not configured');
+            return;
+        }
+
+        const draftOrder = {
+            draft_order: {
+                email: customerEmail,
+                line_items: cartItems.map(item => ({
+                    variant_id: item.variantId,
+                    quantity: item.quantity,
+                })),
+                note: 'Abandoned Stripe checkout - recovery email candidate',
+                tags: 'abandoned-checkout, stripe-recovery',
+                use_customer_default_address: true,
+            }
+        };
+
+        const response = await fetch(
+            `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/draft_orders.json`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                },
+                body: JSON.stringify(draftOrder),
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.text();
+            console.error('Failed to create draft order:', error);
+            return;
+        }
+
+        const result = await response.json();
+        console.log('=== SUCCESS: Created draft order for abandoned checkout ===');
+        console.log('Draft Order ID:', result.draft_order?.id);
+        console.log('Customer:', customerEmail);
+
+    } catch (error) {
+        console.error('=== ERROR: Failed to process abandoned checkout ===');
+        console.error('Error:', error.message);
     }
 }
