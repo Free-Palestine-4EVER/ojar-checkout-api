@@ -8,11 +8,21 @@
 const stripe = require('./utils/stripe');
 
 module.exports = async function handler(req, res) {
+    // CORS configuration - allow all OJAR domains
+    const origin = req.headers.origin;
+    const allowedOrigins = [
+        'https://ojarofficial.com',
+        'https://www.ojarofficial.com',
+        'https://ojarofficial.myshopify.com'
+    ];
+    const corsOrigin = allowedOrigins.includes(origin) ? origin : 'https://ojarofficial.com';
+
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_STORE_URL || 'https://ojarofficial.com');
+        res.setHeader('Access-Control-Allow-Origin', corsOrigin);
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
         return res.status(200).end();
     }
 
@@ -21,7 +31,8 @@ module.exports = async function handler(req, res) {
     }
 
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_STORE_URL || 'https://ojarofficial.com');
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     try {
         const { session_id } = req.query;
