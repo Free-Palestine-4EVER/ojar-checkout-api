@@ -78,7 +78,7 @@ async function createShopifyOrder(orderData) {
                 {
                     kind: 'sale',
                     status: 'success',
-                    amount: (totalAmount / 100).toFixed(2),
+                    amount: Math.max((totalAmount / 100), 0.01).toFixed(2), // Minimum $0.01 for Shopify
                     gateway: 'Stripe',
                 }
             ]
