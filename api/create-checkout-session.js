@@ -193,8 +193,8 @@ module.exports = async function handler(req, res) {
                 allowed_countries: ALLOWED_SHIPPING_COUNTRIES,
             },
 
-            // UPDATED: Set session to expire after 10 minutes for abandoned cart tracking
-            expires_at: Math.floor(Date.now() / 1000) + (10 * 60), // 10 minutes from now
+            // UPDATED: Set session to expire after 30 minutes (Stripe minimum) for abandoned cart tracking
+            expires_at: Math.floor(Date.now() / 1000) + (30 * 60), // 30 minutes from now
 
             metadata: {
                 shopify_cart_token: cartToken || '',
