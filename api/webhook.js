@@ -217,9 +217,9 @@ async function handleAbandonedCheckout(session) {
     console.log('Session ID:', session.id);
 
     try {
-        // Get full session details including shipping
+        // Get full session details (shipping_details is included by default, don't expand it)
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-            expand: ['line_items', 'customer_details', 'shipping_details'],
+            expand: ['line_items', 'customer_details'],
         });
 
         const { customer_details, shipping_details, metadata } = fullSession;
