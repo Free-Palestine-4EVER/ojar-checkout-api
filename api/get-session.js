@@ -48,8 +48,11 @@ module.exports = async function handler(req, res) {
 
         // Check if payment was successful
         if (session.payment_status !== 'paid') {
+            console.log('[get-session] Payment not completed:', session.payment_status);
             return res.status(400).json({ error: 'Payment not completed' });
         }
+
+        console.log('[get-session] Processing session:', session.id);
 
         // Get cart items from metadata (has variant IDs needed for tracking)
         let items = [];
@@ -57,6 +60,7 @@ module.exports = async function handler(req, res) {
             const cartItemsJson = session.metadata?.cart_items_json;
             if (cartItemsJson) {
                 const cartItems = JSON.parse(cartItemsJson);
+                console.log('[get-session] Found cart items in metadata:', cartItems.length);
 
                 // Get Stripe line items for product images
                 const stripeLineItems = session.line_items.data.filter(
@@ -75,6 +79,8 @@ module.exports = async function handler(req, res) {
                         image: stripeItem?.price.product.images?.[0] || null,
                     };
                 });
+            } else {
+                console.log('[get-session] No cart_items_json in metadata');
             }
         } catch (e) {
             console.error('Failed to parse cart items from metadata:', e);
@@ -104,8 +110,7 @@ module.exports = async function handler(req, res) {
             discountCode = discountData.discount?.coupon?.name || discountData.discount?.promotion_code || 'DISCOUNT';
         }
 
-        // Return formatted order summary
-        return res.status(200).json({
+        const responseData = {
             session_id: session.id,
             orderId: session.id,
             customerEmail: session.customer_details?.email,
@@ -118,7 +123,12 @@ module.exports = async function handler(req, res) {
             total: session.amount_total,
             currency: session.currency.toUpperCase(),
             shippingAddress: session.shipping_details || null,
-        });
+        };
+
+        console.log('[get-session] Returning data with', items.length, 'items, total:', session.amount_total);
+
+        // Return formatted order summary
+        return res.status(200).json(responseData);
 
     } catch (error) {
         console.error('Get session error:', error);
