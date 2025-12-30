@@ -234,11 +234,37 @@ async function handleAbandonedCheckout(session) {
             expand: ['line_items', 'customer_details'],
         });
 
-        const { customer_details, shipping_details, metadata, total_details } = fullSession;
-        const customerEmail = customer_details?.email;
+        const { customer_details, shipping_details, metadata, total_details, customer } = fullSession;
+
+        // Strategy 1: Check customer_details (most common for Guest checkout)
+        let customerEmail = customer_details?.email;
+        let customerPhone = customer_details?.phone;
+        let customerName = customer_details?.name;
+
+        // Strategy 2: Check session.customer_email (pre-filled or captured)
+        if (!customerEmail && fullSession.customer_email) {
+            console.log('Found email in session.customer_email');
+            customerEmail = fullSession.customer_email;
+        }
+
+        // Strategy 3: Check Stripe Customer object (if authenticated/Link user)
+        if (!customerEmail && customer) {
+            console.log('Fetching Stripe Customer object:', customer);
+            try {
+                const stripeCustomer = await stripe.customers.retrieve(customer);
+                if (stripeCustomer && stripeCustomer.email) {
+                    console.log('Found email in Stripe Customer object');
+                    customerEmail = stripeCustomer.email;
+                    if (!customerName) customerName = stripeCustomer.name;
+                    if (!customerPhone) customerPhone = stripeCustomer.phone;
+                }
+            } catch (err) {
+                console.error('Failed to retrieve Stripe customer:', err.message);
+            }
+        }
 
         if (!customerEmail) {
-            console.log('No customer email - cannot create abandoned cart recovery');
+            console.log('No customer email found in session or customer object - cannot create abandoned cart recovery');
             return;
         }
 
