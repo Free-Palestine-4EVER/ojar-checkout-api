@@ -196,6 +196,19 @@ module.exports = async function handler(req, res) {
             // UPDATED: Set session to expire after 30 minutes (Stripe minimum) for abandoned cart tracking
             expires_at: Math.floor(Date.now() / 1000) + (30 * 60), // 30 minutes from now
 
+            // UPDATED: Enable abandoned cart recovery with unique recovery URL
+            after_expiration: {
+                recovery: {
+                    enabled: true,
+                    allow_promotion_codes: true, // Let customers use promo codes on recovery
+                }
+            },
+
+            // UPDATED: Collect marketing consent for promotional emails
+            consent_collection: {
+                promotions: 'auto', // Shows checkbox: "Keep me updated with news and offers"
+            },
+
             metadata: {
                 shopify_cart_token: cartToken || '',
                 currency: currency,
