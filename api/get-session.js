@@ -51,16 +51,43 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'Payment not completed' });
         }
 
-        // Format line items for display
-        const items = session.line_items.data
-            .filter(item => item.price.product.name !== 'Shipping') // Exclude shipping line
-            .map(item => ({
-                name: item.price.product.name,
-                quantity: item.quantity,
-                price: item.amount_total,
-                currency: session.currency.toUpperCase(),
-                image: item.price.product.images?.[0] || null,
-            }));
+        // Get cart items from metadata (has variant IDs needed for tracking)
+        let items = [];
+        try {
+            const cartItemsJson = session.metadata?.cart_items_json;
+            if (cartItemsJson) {
+                const cartItems = JSON.parse(cartItemsJson);
+
+                // Get Stripe line items for product images
+                const stripeLineItems = session.line_items.data.filter(
+                    item => item.price.product.name !== 'Shipping'
+                );
+
+                // Merge cart data (has variant IDs) with Stripe data (has images)
+                items = cartItems.map((cartItem, index) => {
+                    const stripeItem = stripeLineItems[index];
+                    return {
+                        id: cartItem.variantId,
+                        variant_id: cartItem.variantId,
+                        name: cartItem.name || stripeItem?.price.product.name,
+                        quantity: cartItem.quantity,
+                        price: cartItem.price, // Already in cents
+                        image: stripeItem?.price.product.images?.[0] || null,
+                    };
+                });
+            }
+        } catch (e) {
+            console.error('Failed to parse cart items from metadata:', e);
+            // Fallback to Stripe line items (won't have variant IDs)
+            items = session.line_items.data
+                .filter(item => item.price.product.name !== 'Shipping')
+                .map(item => ({
+                    name: item.price.product.name,
+                    quantity: item.quantity,
+                    price: item.amount_total,
+                    image: item.price.product.images?.[0] || null,
+                }));
+        }
 
         // Get shipping info
         const shippingItem = session.line_items.data.find(
@@ -79,15 +106,16 @@ module.exports = async function handler(req, res) {
 
         // Return formatted order summary
         return res.status(200).json({
+            session_id: session.id,
             orderId: session.id,
             customerEmail: session.customer_details?.email,
             customerPhone: session.customer_details?.phone,
             items,
             subtotal: session.amount_subtotal,
             shipping: shippingItem?.amount_total || 0,
-            discountTotal: discountAmount, // ADDED: Discount amount
-            discountCode: discountCode,    // ADDED: Discount code name
-            total: session.amount_total,   // Final amount paid (Subtotal + Shipping - Discount)
+            discountTotal: discountAmount,
+            discountCode: discountCode,
+            total: session.amount_total,
             currency: session.currency.toUpperCase(),
             shippingAddress: session.shipping_details || null,
         });
