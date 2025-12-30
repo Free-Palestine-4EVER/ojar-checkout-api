@@ -25,10 +25,20 @@ async function getRawBody(req) {
     return Buffer.concat(chunks);
 }
 
-module.exports = async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+module.exports = async (req, res) => {
+    // Add CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, stripe-signature');
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
     }
+
+    console.log('=== WEBHOOK RECEIVED ===');
+    console.log('Method:', req.method);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -38,37 +48,54 @@ module.exports = async function handler(req, res) {
     }
 
     const sig = req.headers['stripe-signature'];
+
+    if (!sig) {
+        console.error('No stripe-signature header found');
+        return res.status(400).json({ error: 'No signature' });
+    }
+
     let event;
     let rawBody;
 
     try {
         rawBody = await getRawBody(req);
+        console.log('Raw body length:', rawBody.length);
         event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+        console.log('Event type:', event.type);
+        console.log('Event ID:', event.id);
     } catch (err) {
         console.error('Webhook signature verification failed:', err.message);
         return res.status(400).json({ error: `Webhook Error: ${err.message}` });
     }
 
     // Handle the event
-    switch (event.type) {
-        case 'checkout.session.completed':
-            await handleCheckoutComplete(event.data.object);
-            break;
+    try {
+        switch (event.type) {
+            case 'checkout.session.completed':
+                console.log('Processing completed checkout...');
+                await handleCheckoutComplete(event.data.object);
+                break;
 
-        case 'checkout.session.expired':
-            await handleAbandonedCheckout(event.data.object);
-            break;
+            case 'checkout.session.expired':
+                console.log('Processing expired checkout...');
+                await handleAbandonedCheckout(event.data.object);
+                break;
 
-        case 'payment_intent.payment_failed':
-            console.log('Payment failed:', event.data.object.id);
-            break;
+            case 'payment_intent.payment_failed':
+                console.log('Payment failed:', event.data.object.id);
+                break;
 
-        default:
-            console.log(`Unhandled event type: ${event.type}`);
+            default:
+                console.log(`Unhandled event type: ${event.type}`);
+        }
+    } catch (error) {
+        console.error('Error processing webhook:', error);
+        return res.status(500).json({ error: 'Processing failed' });
     }
 
     // Return 200 to acknowledge receipt
-    return res.status(200).json({ received: true });
+    console.log('=== WEBHOOK PROCESSED SUCCESSFULLY ===');
+    return res.status(200).json({ received: true, eventType: event.type });
 };
 
 /**
