@@ -26,12 +26,17 @@ async function createShopifyOrder(orderData) {
     const shopifyOrder = {
         order: {
             email: customer.email,
+            phone: customer.phone || shippingAddress.phone, // Add customer phone
             financial_status: 'paid',
             send_receipt: true,
             send_fulfillment_receipt: true,
             note: discountCode ? `Promo Code: ${discountCode}` : '',
             note_attributes: [
-                { name: 'stripe_payment_id', value: stripePaymentIntentId }
+                { name: 'stripe_payment_id', value: stripePaymentIntentId },
+                ...(discountCode ? [
+                    { name: 'discount_code', value: discountCode },
+                    { name: 'discount_amount', value: `${(discountAmount / 100).toFixed(2)} ${currency}` }
+                ] : [])
             ],
             tags: `stripe-checkout, multi-currency, stripe:${stripePaymentIntentId}${discountCode ? `, promo:${discountCode}` : ''}`,
             currency: currency,
@@ -79,15 +84,6 @@ async function createShopifyOrder(orderData) {
             ]
         }
     };
-
-    // Add discount code if present
-    if (discountCode && discountAmount > 0) {
-        shopifyOrder.order.discount_codes = [{
-            code: discountCode,
-            amount: (discountAmount / 100).toFixed(2),
-            type: 'fixed_amount'
-        }];
-    }
 
     const response = await fetch(
         `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/orders.json`,
