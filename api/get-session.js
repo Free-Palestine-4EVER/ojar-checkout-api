@@ -41,9 +41,9 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'session_id is required' });
         }
 
-        // Retrieve the session with line items expanded
+        // Retrieve the session with line items and total details expanded
         const session = await stripe.checkout.sessions.retrieve(session_id, {
-            expand: ['line_items', 'line_items.data.price.product'],
+            expand: ['line_items', 'line_items.data.price.product', 'total_details.breakdown'],
         });
 
         // Check if payment was successful
@@ -67,15 +67,27 @@ module.exports = async function handler(req, res) {
             item => item.price.product.name === 'Shipping'
         );
 
+        // Extract Discount Details
+        let discountCode = null;
+        let discountAmount = 0;
+
+        if (session.total_details?.breakdown?.discounts?.length > 0) {
+            const discountData = session.total_details.breakdown.discounts[0];
+            discountAmount = discountData.amount || 0;
+            discountCode = discountData.discount?.coupon?.name || discountData.discount?.promotion_code || 'DISCOUNT';
+        }
+
         // Return formatted order summary
         return res.status(200).json({
             orderId: session.id,
             customerEmail: session.customer_details?.email,
-            customerPhone: session.customer_details?.phone, // ADDED: Include phone number
+            customerPhone: session.customer_details?.phone,
             items,
             subtotal: session.amount_subtotal,
             shipping: shippingItem?.amount_total || 0,
-            total: session.amount_total,
+            discountTotal: discountAmount, // ADDED: Discount amount
+            discountCode: discountCode,    // ADDED: Discount code name
+            total: session.amount_total,   // Final amount paid (Subtotal + Shipping - Discount)
             currency: session.currency.toUpperCase(),
             shippingAddress: session.shipping_details || null,
         });
