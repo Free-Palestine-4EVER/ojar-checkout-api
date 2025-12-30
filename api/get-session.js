@@ -47,7 +47,8 @@ module.exports = async function handler(req, res) {
         });
 
         // Check if payment was successful
-        if (session.payment_status !== 'paid') {
+        // Check if payment was successful (paid OR no_payment_required for 100% off)
+        if (session.payment_status !== 'paid' && session.payment_status !== 'no_payment_required') {
             console.log('[get-session] Payment not completed:', session.payment_status);
             return res.status(400).json({ error: 'Payment not completed' });
         }
