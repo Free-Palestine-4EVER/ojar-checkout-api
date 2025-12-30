@@ -232,17 +232,10 @@ async function handleAbandonedCheckout(session) {
     try {
         // Get full session details (shipping_details is included by default, don't expand it)
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-            expand: ['line_items', 'customer_details', 'after_expiration'],
+            expand: ['line_items', 'customer_details'],
         });
 
-        const { customer_details, shipping_details, metadata, total_details, customer, after_expiration } = fullSession;
-
-        // Extract recovery URL for abandoned cart emails (similar to Shopify's "Copy checkout URL")
-        const recoveryUrl = after_expiration?.recovery?.url || null;
-        if (recoveryUrl) {
-            console.log('Recovery URL available:', recoveryUrl);
-            console.log('Recovery URL expires at:', new Date(after_expiration.recovery.expires_at * 1000).toISOString());
-        }
+        const { customer_details, shipping_details, metadata, total_details, customer } = fullSession;
 
         // Strategy 1: Check customer_details (most common for Guest checkout)
         let customerEmail = customer_details?.email;
@@ -338,7 +331,7 @@ async function handleAbandonedCheckout(session) {
                     quantity: item.quantity,
                 })),
                 customer: customerData,
-                note: `Abandoned Stripe checkout - Session: ${session.id}${recoveryUrl ? `\nRecovery URL: ${recoveryUrl}` : ''}`,
+                note: `Abandoned Stripe checkout - Session: ${session.id}`,
                 tags: 'abandoned-checkout, stripe-recovery',
             }
         };
@@ -367,7 +360,7 @@ async function handleAbandonedCheckout(session) {
 
         // Add discount code to note and apply discount if present
         if (discountCode) {
-            draftOrder.draft_order.note = `Abandoned Stripe checkout - Session: ${session.id}\nPromo Code Used: ${discountCode}${recoveryUrl ? `\nRecovery URL: ${recoveryUrl}` : ''}`;
+            draftOrder.draft_order.note = `Abandoned Stripe checkout - Session: ${session.id}\nPromo Code Used: ${discountCode}`;
             console.log('Adding discount to draft order:', discountCode);
 
             // Apply discount to draft order
