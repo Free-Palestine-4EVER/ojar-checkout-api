@@ -6,6 +6,7 @@
  * with the customer's selected currency and shipping calculated.
  * 
  * UPDATED: Added phone_number_collection and expanded country list
+ * UPDATED: Added 5-minute session expiration for abandoned cart tracking
  */
 
 const stripe = require('./utils/stripe');
@@ -191,6 +192,9 @@ module.exports = async function handler(req, res) {
             shipping_address_collection: {
                 allowed_countries: ALLOWED_SHIPPING_COUNTRIES,
             },
+
+            // UPDATED: Set session to expire after 10 minutes for abandoned cart tracking
+            expires_at: Math.floor(Date.now() / 1000) + (10 * 60), // 10 minutes from now
 
             metadata: {
                 shopify_cart_token: cartToken || '',

@@ -190,12 +190,12 @@ async function handleAbandonedCheckout(session) {
     console.log('Session ID:', session.id);
 
     try {
-        // Get full session details
+        // Get full session details including shipping
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-            expand: ['line_items', 'customer_details'],
+            expand: ['line_items', 'customer_details', 'shipping_details'],
         });
 
-        const { customer_details, metadata } = fullSession;
+        const { customer_details, shipping_details, metadata } = fullSession;
         const customerEmail = customer_details?.email;
 
         if (!customerEmail) {
@@ -218,6 +218,8 @@ async function handleAbandonedCheckout(session) {
         }
 
         console.log('Abandoned checkout by:', customerEmail);
+        console.log('Customer name:', customer_details?.name);
+        console.log('Customer phone:', customer_details?.phone);
         console.log('Items:', cartItems.length);
 
         // Create a Shopify draft order for abandoned cart recovery
@@ -229,6 +231,22 @@ async function handleAbandonedCheckout(session) {
             return;
         }
 
+        // Get shipping address (prefer shipping_details, fallback to customer billing)
+        const shippingAddress = shipping_details?.address || customer_details?.address;
+
+        // Build customer object for draft order
+        const customerData = {
+            email: customerEmail,
+        };
+
+        // Add customer name if available
+        if (customer_details?.name) {
+            const nameParts = customer_details.name.split(' ');
+            customerData.first_name = nameParts[0] || '';
+            customerData.last_name = nameParts.slice(1).join(' ') || '';
+        }
+
+        // Build draft order with full customer details
         const draftOrder = {
             draft_order: {
                 email: customerEmail,
@@ -236,11 +254,33 @@ async function handleAbandonedCheckout(session) {
                     variant_id: item.variantId,
                     quantity: item.quantity,
                 })),
-                note: 'Abandoned Stripe checkout - recovery email candidate',
+                customer: customerData,
+                note: `Abandoned Stripe checkout - Session: ${session.id}`,
                 tags: 'abandoned-checkout, stripe-recovery',
-                use_customer_default_address: true,
             }
         };
+
+        // Add shipping address if available
+        if (shippingAddress) {
+            draftOrder.draft_order.shipping_address = {
+                first_name: customerData.first_name || 'Customer',
+                last_name: customerData.last_name || '',
+                address1: shippingAddress.line1 || '',
+                address2: shippingAddress.line2 || '',
+                city: shippingAddress.city || '',
+                province: shippingAddress.state || '',
+                country: shippingAddress.country || '',
+                zip: shippingAddress.postal_code || '',
+                phone: customer_details?.phone || '',
+            };
+            console.log('Shipping address added:', draftOrder.draft_order.shipping_address);
+        }
+
+        // Add phone to customer if available
+        if (customer_details?.phone) {
+            draftOrder.draft_order.phone = customer_details.phone;
+            console.log('Customer phone:', customer_details.phone);
+        }
 
         const response = await fetch(
             `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/draft_orders.json`,
@@ -264,6 +304,11 @@ async function handleAbandonedCheckout(session) {
         console.log('=== SUCCESS: Created draft order for abandoned checkout ===');
         console.log('Draft Order ID:', result.draft_order?.id);
         console.log('Customer:', customerEmail);
+        console.log('Customer details included:', {
+            name: customer_details?.name,
+            phone: customer_details?.phone,
+            hasShippingAddress: !!shippingAddress
+        });
 
     } catch (error) {
         console.error('=== ERROR: Failed to process abandoned checkout ===');
