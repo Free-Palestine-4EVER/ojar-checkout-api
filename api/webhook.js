@@ -109,7 +109,7 @@ async function handleCheckoutComplete(session) {
         // Get full session with line items
         console.log('Fetching full session from Stripe...');
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-            expand: ['line_items', 'customer_details', 'payment_intent'],
+            expand: ['line_items', 'customer_details', 'payment_intent', 'total_details.breakdown'],
         });
         console.log('Full session retrieved');
 
