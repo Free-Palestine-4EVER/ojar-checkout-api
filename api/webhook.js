@@ -113,11 +113,21 @@ async function handleCheckoutComplete(session) {
         });
         console.log('Full session retrieved');
 
-        const { customer_details, shipping_details, metadata, payment_intent } = fullSession;
+        const { customer_details, shipping_details, metadata, payment_intent, total_details } = fullSession;
 
         console.log('Customer email:', customer_details?.email);
-        console.log('Customer phone:', customer_details?.phone); // ADDED: Log phone
+        console.log('Customer phone:', customer_details?.phone);
         console.log('Metadata:', JSON.stringify(metadata));
+
+        // Extract discount code if present
+        let discountCode = null;
+        let discountAmount = 0;
+        if (total_details?.breakdown?.discounts?.length > 0) {
+            const discount = total_details.breakdown.discounts[0];
+            discountAmount = discount.amount || 0;
+            discountCode = discount.discount?.coupon?.name || discount.discount?.promotion_code?.code || 'DISCOUNT';
+            console.log('Discount code found:', discountCode, 'Amount:', discountAmount);
+        }
 
         // Parse cart items from metadata
         let cartItems = [];
@@ -162,7 +172,7 @@ async function handleCheckoutComplete(session) {
             customer: {
                 email: customer_details.email,
                 name: customer_details.name,
-                phone: customer_details.phone, // ADDED: Include phone
+                phone: customer_details.phone,
             },
             lineItems: cartItems,
             shippingAddress: {
@@ -174,12 +184,14 @@ async function handleCheckoutComplete(session) {
                 state: shippingAddress.state,
                 country: shippingAddress.country,
                 postalCode: shippingAddress.postal_code,
-                phone: customer_details.phone, // ADDED: Use collected phone
+                phone: customer_details.phone,
             },
             currency: metadata?.currency || 'USD',
             totalAmount: fullSession.amount_total,
             shippingCost: shippingCost,
             stripePaymentIntentId: payment_intent?.id || session.payment_intent,
+            discountCode: discountCode,
+            discountAmount: discountAmount,
         };
 
         console.log('Order data prepared:', JSON.stringify(orderData, null, 2));
@@ -222,12 +234,22 @@ async function handleAbandonedCheckout(session) {
             expand: ['line_items', 'customer_details'],
         });
 
-        const { customer_details, shipping_details, metadata } = fullSession;
+        const { customer_details, shipping_details, metadata, total_details } = fullSession;
         const customerEmail = customer_details?.email;
 
         if (!customerEmail) {
             console.log('No customer email - cannot create abandoned cart recovery');
             return;
+        }
+
+        // Extract discount code if present
+        let discountCode = null;
+        let discountAmount = 0;
+        if (total_details?.breakdown?.discounts?.length > 0) {
+            const discount = total_details.breakdown.discounts[0];
+            discountAmount = discount.amount || 0;
+            discountCode = discount.discount?.coupon?.name || discount.discount?.promotion_code?.code || 'DISCOUNT';
+            console.log('Discount code found:', discountCode, 'Amount:', discountAmount);
         }
 
         // Parse cart items from metadata
@@ -307,6 +329,23 @@ async function handleAbandonedCheckout(session) {
         if (customer_details?.phone) {
             draftOrder.draft_order.phone = customer_details.phone;
             console.log('Customer phone:', customer_details.phone);
+        }
+
+        // Add discount code to note and apply discount if present
+        if (discountCode) {
+            draftOrder.draft_order.note = `Abandoned Stripe checkout - Session: ${session.id}\nPromo Code Used: ${discountCode}`;
+            console.log('Adding discount to draft order:', discountCode);
+
+            // Apply discount to draft order
+            if (discountAmount > 0) {
+                draftOrder.draft_order.applied_discount = {
+                    description: `${discountCode}`,
+                    value_type: 'fixed_amount',
+                    value: (discountAmount / 100).toFixed(2),
+                    amount: (discountAmount / 100).toFixed(2),
+                };
+                console.log('Applied discount amount:', (discountAmount / 100).toFixed(2));
+            }
         }
 
         const response = await fetch(
