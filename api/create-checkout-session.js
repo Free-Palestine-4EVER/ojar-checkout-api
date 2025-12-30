@@ -188,6 +188,11 @@ module.exports = async function handler(req, res) {
                 enabled: true,
             },
 
+            // UPDATED: Collect email marketing consent
+            consent_collection: {
+                promotional_communications: 'checkbox',
+            },
+
             // UPDATED: Allow only OJAR delivery countries for shipping
             shipping_address_collection: {
                 allowed_countries: ALLOWED_SHIPPING_COUNTRIES,

@@ -192,6 +192,7 @@ async function handleCheckoutComplete(session) {
             stripePaymentIntentId: payment_intent?.id || session.payment_intent,
             discountCode: discountCode,
             discountAmount: discountAmount,
+            acceptsMarketing: fullSession.consent?.promotional_communications === 'accepted',
         };
 
         console.log('Order data prepared:', JSON.stringify(orderData, null, 2));

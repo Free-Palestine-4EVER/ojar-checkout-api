@@ -17,16 +17,20 @@ async function createShopifyOrder(orderData) {
         shippingAddress,
         currency,
         totalAmount,
-        stripePaymentIntentId,
-        shippingCost,
-        discountCode,
-        discountAmount
+        discountAmount,
+        acceptsMarketing
     } = orderData;
 
     const shopifyOrder = {
         order: {
             email: customer.email,
             phone: customer.phone || shippingAddress.phone, // Add customer phone
+            customer: {
+                first_name: shippingAddress.firstName,
+                last_name: shippingAddress.lastName,
+                email: customer.email,
+                accepts_marketing: acceptsMarketing || false,
+            },
             financial_status: 'paid',
             send_receipt: true,
             send_fulfillment_receipt: true,
