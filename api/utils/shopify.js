@@ -39,6 +39,13 @@ async function createShopifyOrder(orderData) {
                 ] : [])
             ],
             tags: `stripe-checkout, multi-currency, stripe:${stripePaymentIntentId}${discountCode ? `, promo:${discountCode}` : ''}`,
+            discount_codes: discountCode ? [
+                {
+                    code: discountCode,
+                    amount: (discountAmount / 100).toFixed(2),
+                    type: 'fixed_amount'
+                }
+            ] : undefined,
             currency: currency,
             line_items: lineItems.map(item => ({
                 variant_id: item.variantId,
