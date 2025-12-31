@@ -192,7 +192,8 @@ async function handleCheckoutComplete(session) {
             stripePaymentIntentId: payment_intent?.id || session.payment_intent,
             discountCode: discountCode,
             discountAmount: discountAmount,
-            acceptsMarketing: fullSession.consent?.promotional_communications === 'accepted',
+            // Prioritize marketing consent from cart page, then Stripe's promotional consent
+            acceptsMarketing: metadata?.marketing_consent === 'true' || fullSession.consent?.promotional_communications === 'accepted',
         };
 
         console.log('Order data prepared:', JSON.stringify(orderData, null, 2));
@@ -237,8 +238,23 @@ async function handleAbandonedCheckout(session) {
 
         const { customer_details, shipping_details, metadata, total_details, customer } = fullSession;
 
+        // Strategy 0: Check metadata for pre-captured email (from cart page)
+        let customerEmail = metadata?.customer_email || null;
+        let marketingConsent = metadata?.marketing_consent === 'true';
+
+        if (customerEmail) {
+            console.log('Found email in metadata (captured before checkout):', customerEmail);
+            console.log('Marketing consent from cart page:', marketingConsent);
+        }
+
         // Strategy 1: Check customer_details (most common for Guest checkout)
-        let customerEmail = customer_details?.email;
+        if (!customerEmail) {
+            customerEmail = customer_details?.email;
+            if (customerEmail) {
+                console.log('Found email in customer_details');
+            }
+        }
+
         let customerPhone = customer_details?.phone;
         let customerName = customer_details?.name;
 
@@ -313,6 +329,7 @@ async function handleAbandonedCheckout(session) {
         // Build customer object for draft order
         const customerData = {
             email: customerEmail,
+            accepts_marketing: marketingConsent, // Set marketing consent from cart page
         };
 
         // Add customer name if available
@@ -331,7 +348,7 @@ async function handleAbandonedCheckout(session) {
                     quantity: item.quantity,
                 })),
                 customer: customerData,
-                note: `Abandoned Stripe checkout - Session: ${session.id}`,
+                note: `Abandoned Stripe checkout - Session: ${session.id}\nMarketing consent: ${marketingConsent ? 'Yes' : 'No'}`,
                 tags: 'abandoned-checkout, stripe-recovery',
             }
         };

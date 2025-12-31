@@ -104,6 +104,7 @@ module.exports = async function handler(req, res) {
             currency,         // Selected currency code (USD, EUR, GBP, etc.)
             countryCode,      // Customer's country code for shipping
             customerEmail,    // Optional: pre-fill email
+            marketingConsent, // Optional: marketing consent flag
             cartToken,        // Shopify cart token for restoration
         } = req.body;
 
@@ -200,6 +201,8 @@ module.exports = async function handler(req, res) {
                 shopify_cart_token: cartToken || '',
                 currency: currency,
                 country_code: countryCode || '',
+                customer_email: customerEmail || '',
+                marketing_consent: marketingConsent ? 'true' : 'false',
                 cart_items_json: JSON.stringify(cartItems.map(item => ({
                     variantId: item.variantId,
                     quantity: item.quantity,
