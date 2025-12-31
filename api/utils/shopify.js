@@ -24,10 +24,14 @@ async function createShopifyOrder(orderData) {
         acceptsMarketing
     } = orderData;
 
+    // Check if currency uses 3 decimals (KWD, OMR, BHD)
+    const is3DecimalCurrency = ['KWD', 'OMR', 'BHD'].includes(currency?.toUpperCase());
+    const divisor = is3DecimalCurrency ? 1000 : 100;
+
     const shopifyOrder = {
         order: {
             email: customer.email,
-            phone: customer.phone || shippingAddress.phone, // Add customer phone
+            // NOTE: Removed phone - Shopify validation too strict, phone still in addresses
             customer: {
                 first_name: shippingAddress.firstName,
                 last_name: shippingAddress.lastName,
@@ -42,14 +46,14 @@ async function createShopifyOrder(orderData) {
                 { name: 'stripe_payment_id', value: stripePaymentIntentId },
                 ...(discountCode ? [
                     { name: 'discount_code', value: discountCode },
-                    { name: 'discount_amount', value: `${(discountAmount / 100).toFixed(2)} ${currency}` }
+                    { name: 'discount_amount', value: `${(discountAmount / divisor).toFixed(2)} ${currency}` }
                 ] : [])
             ],
             tags: `stripe-checkout, multi-currency, stripe:${stripePaymentIntentId}${discountCode ? `, promo:${discountCode}` : ''}`,
             discount_codes: discountCode ? [
                 {
                     code: discountCode,
-                    amount: (discountAmount / 100).toFixed(2),
+                    amount: (discountAmount / divisor).toFixed(2),
                     type: 'fixed_amount'
                 }
             ] : undefined,
@@ -57,7 +61,7 @@ async function createShopifyOrder(orderData) {
             line_items: lineItems.map(item => ({
                 variant_id: item.variantId,
                 quantity: item.quantity,
-                price: (item.price / 100).toFixed(2), // Convert from cents
+                price: (item.price / divisor).toFixed(2), // Divide by 1000 for KWD/OMR/BHD
             })),
             shipping_address: {
                 first_name: shippingAddress.firstName,
@@ -84,7 +88,7 @@ async function createShopifyOrder(orderData) {
             shipping_lines: [
                 {
                     title: 'International Shipping',
-                    price: (shippingCost / 100).toFixed(2),
+                    price: (shippingCost / divisor).toFixed(2),
                     code: 'INTL',
                 }
             ],
@@ -92,7 +96,7 @@ async function createShopifyOrder(orderData) {
                 {
                     kind: 'sale',
                     status: 'success',
-                    amount: Math.max((totalAmount / 100), 0.01).toFixed(2), // Minimum $0.01 for Shopify
+                    amount: Math.max((totalAmount / divisor), 0.01).toFixed(2),
                     gateway: 'Stripe',
                 }
             ]
