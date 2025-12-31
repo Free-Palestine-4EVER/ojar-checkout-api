@@ -17,6 +17,9 @@ async function createShopifyOrder(orderData) {
         shippingAddress,
         currency,
         totalAmount,
+        shippingCost,
+        stripePaymentIntentId,
+        discountCode,
         discountAmount,
         acceptsMarketing
     } = orderData;
