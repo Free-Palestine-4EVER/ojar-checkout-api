@@ -223,58 +223,64 @@ async function handleCheckoutComplete(session) {
             // Only update if we have explicit consent data from cart page
             console.log('Updating customer marketing consent:', marketingConsent);
 
-            try {
-                // Search for the customer by email
-                const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
-                const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+            // Wait 3 seconds for Shopify to create the customer from the order
+            setTimeout(async () => {
+                try {
+                    // Search for the customer by email
+                    const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+                    const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 
-                const searchResponse = await fetch(
-                    `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(customer_details.email)}`,
-                    {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
-                        },
-                    }
-                );
-
-                const searchData = await searchResponse.json();
-
-                if (searchData.customers && searchData.customers.length > 0) {
-                    const customerId = searchData.customers[0].id;
-                    console.log('Found customer, updating marketing consent:', customerId);
-
-                    // Update customer's marketing consent
-                    const updateResponse = await fetch(
-                        `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/${customerId}.json`,
+                    const searchResponse = await fetch(
+                        `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(customer_details.email)}`,
                         {
-                            method: 'PUT',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
                             },
-                            body: JSON.stringify({
-                                customer: {
-                                    id: customerId,
-                                    accepts_marketing: marketingConsent,
-                                    tags: 'stripe-checkout',
-                                }
-                            })
                         }
                     );
 
-                    if (updateResponse.ok) {
-                        console.log('Customer marketing consent updated successfully');
+                    const searchData = await searchResponse.json();
+
+                    if (searchData.customers && searchData.customers.length > 0) {
+                        const customerId = searchData.customers[0].id;
+                        console.log('Found customer after delay, updating marketing consent:', customerId);
+
+                        // Use Shopify's marketing consent API - this is the CORRECT way
+                        const consentResponse = await fetch(
+                            `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/${customerId}.json`,
+                            {
+                                method: 'PUT',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                                },
+                                body: JSON.stringify({
+                                    customer: {
+                                        id: customerId,
+                                        email_marketing_consent: {
+                                            state: marketingConsent ? 'subscribed' : 'not_subscribed',
+                                            opt_in_level: marketingConsent ? 'single_opt_in' : 'unknown',
+                                            consent_updated_at: new Date().toISOString()
+                                        }
+                                    }
+                                })
+                            }
+                        );
+
+                        if (consentResponse.ok) {
+                            console.log('✅ Customer marketing consent updated successfully via email_marketing_consent API');
+                        } else {
+                            const errorText = await consentResponse.text();
+                            console.error('Failed to update customer consent:', errorText);
+                        }
                     } else {
-                        console.error('Failed to update customer:', await updateResponse.text());
+                        console.log('Customer not found even after 3 second delay');
                     }
-                } else {
-                    console.log('Customer not found immediately after order creation');
+                } catch (customerError) {
+                    console.error('Error updating customer marketing consent:', customerError);
                 }
-            } catch (customerError) {
-                console.error('Error updating customer marketing consent:', customerError);
-                // Don't fail the whole process if customer update fails
-            }
+            }, 3000); // 3 second delay
         }
 
     } catch (error) {
