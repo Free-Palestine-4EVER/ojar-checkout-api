@@ -375,6 +375,92 @@ async function handleAbandonedCheckout(session) {
             console.log('Customer phone:', customer_details.phone);
         }
 
+        // ===== CREATE/UPDATE SHOPIFY CUSTOMER EXPLICITLY =====
+        // Draft orders don't auto-create customers, so we do it manually
+        console.log('Creating/updating Shopify customer...');
+
+        try {
+            // First, search if customer exists
+            const searchResponse = await fetch(
+                `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(customerEmail)}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                    },
+                }
+            );
+
+            const searchData = await searchResponse.json();
+            let customerId = null;
+
+            if (searchData.customers && searchData.customers.length > 0) {
+                // Customer exists - update it
+                customerId = searchData.customers[0].id;
+                console.log('Customer exists, updating:', customerId);
+
+                const updateResponse = await fetch(
+                    `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/${customerId}.json`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                        },
+                        body: JSON.stringify({
+                            customer: {
+                                id: customerId,
+                                accepts_marketing: marketingConsent,
+                                tags: 'stripe-checkout, abandoned-checkout',
+                            }
+                        })
+                    }
+                );
+
+                if (!updateResponse.ok) {
+                    console.error('Failed to update customer:', await updateResponse.text());
+                }
+            } else {
+                // Customer doesn't exist - create new
+                console.log('Customer does not exist, creating new...');
+
+                const createResponse = await fetch(
+                    `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers.json`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                        },
+                        body: JSON.stringify({
+                            customer: {
+                                email: customerEmail,
+                                first_name: customerData.first_name || 'Customer',
+                                last_name: customerData.last_name || '',
+                                phone: customer_details?.phone || '',
+                                accepts_marketing: marketingConsent,
+                                tags: 'stripe-checkout, abandoned-checkout',
+                                note: `Abandoned Stripe checkout - Session: ${session.id}`,
+                            }
+                        })
+                    }
+                );
+
+                if (createResponse.ok) {
+                    const createData = await createResponse.json();
+                    customerId = createData.customer.id;
+                    console.log('Customer created:', customerId);
+                } else {
+                    console.error('Failed to create customer:', await createResponse.text());
+                }
+            }
+
+            console.log('Shopify customer ready:', customerId);
+        } catch (customerError) {
+            console.error('Error creating/updating customer:', customerError);
+            // Continue anyway - draft order will still be created
+        }
+
         // Add discount code to note and apply discount if present
         if (discountCode) {
             draftOrder.draft_order.note = `Abandoned Stripe checkout - Session: ${session.id}\nPromo Code Used: ${discountCode}`;
