@@ -215,6 +215,68 @@ async function handleCheckoutComplete(session) {
         console.log('Order ID:', shopifyOrder.order?.id);
         console.log('Order number:', shopifyOrder.order?.order_number);
 
+        // ===== UPDATE CUSTOMER WITH MARKETING CONSENT =====
+        // Shopify creates the customer from the order, but we need to explicitly update accepts_marketing
+        const marketingConsent = metadata?.marketing_consent === 'true' || fullSession.consent?.promotional_communications === 'accepted';
+
+        if (marketingConsent || metadata?.marketing_consent === 'false') {
+            // Only update if we have explicit consent data from cart page
+            console.log('Updating customer marketing consent:', marketingConsent);
+
+            try {
+                // Search for the customer by email
+                const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+                const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+                const searchResponse = await fetch(
+                    `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(customer_details.email)}`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                        },
+                    }
+                );
+
+                const searchData = await searchResponse.json();
+
+                if (searchData.customers && searchData.customers.length > 0) {
+                    const customerId = searchData.customers[0].id;
+                    console.log('Found customer, updating marketing consent:', customerId);
+
+                    // Update customer's marketing consent
+                    const updateResponse = await fetch(
+                        `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/customers/${customerId}.json`,
+                        {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+                            },
+                            body: JSON.stringify({
+                                customer: {
+                                    id: customerId,
+                                    accepts_marketing: marketingConsent,
+                                    tags: 'stripe-checkout',
+                                }
+                            })
+                        }
+                    );
+
+                    if (updateResponse.ok) {
+                        console.log('Customer marketing consent updated successfully');
+                    } else {
+                        console.error('Failed to update customer:', await updateResponse.text());
+                    }
+                } else {
+                    console.log('Customer not found immediately after order creation');
+                }
+            } catch (customerError) {
+                console.error('Error updating customer marketing consent:', customerError);
+                // Don't fail the whole process if customer update fails
+            }
+        }
+
     } catch (error) {
         console.error('=== ERROR: Failed to create Shopify order ===');
         console.error('Error message:', error.message);
