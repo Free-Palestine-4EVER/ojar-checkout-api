@@ -8,6 +8,147 @@
 
 const stripe = require('./utils/stripe');
 const { createShopifyOrder } = require('./utils/shopify');
+const crypto = require('crypto');
+
+// ===== FACEBOOK CONVERSIONS API =====
+/**
+ * Send Purchase event to Facebook Conversions API (server-side tracking)
+ * More reliable than browser pixels - works even with ad blockers
+ */
+async function sendFacebookConversionEvent(session, orderData) {
+    const FB_PIXEL_ID = process.env.FB_PIXEL_ID;
+    const FB_ACCESS_TOKEN = process.env.FB_CONVERSIONS_API_TOKEN;
+
+    if (!FB_PIXEL_ID || !FB_ACCESS_TOKEN) {
+        console.log('[FB CAPI] Missing credentials, skipping server-side tracking');
+        return;
+    }
+
+    try {
+        // Hash email for privacy (Facebook requirement)
+        const hashedEmail = crypto.createHash('sha256')
+            .update(orderData.customer.email.toLowerCase().trim())
+            .digest('hex');
+
+        // Hash phone if available
+        let hashedPhone = null;
+        if (orderData.customer.phone) {
+            // Remove non-numeric characters and hash
+            const cleanPhone = orderData.customer.phone.replace(/\D/g, '');
+            hashedPhone = crypto.createHash('sha256')
+                .update(cleanPhone)
+                .digest('hex');
+        }
+
+        const eventData = {
+            data: [{
+                event_name: 'Purchase',
+                event_time: Math.floor(Date.now() / 1000),
+                event_id: session.id, // Deduplication with browser pixel
+                action_source: 'website',
+                user_data: {
+                    em: [hashedEmail],
+                    ph: hashedPhone ? [hashedPhone] : undefined,
+                    client_ip_address: session.client_ip || undefined,
+                    client_user_agent: session.user_agent || undefined,
+                },
+                custom_data: {
+                    currency: orderData.currency,
+                    value: orderData.totalAmount / (orderData.currency === 'OMR' || orderData.currency === 'KWD' || orderData.currency === 'BHD' ? 1000 : 100),
+                    content_ids: orderData.lineItems.map(i => String(i.variantId)),
+                    content_type: 'product',
+                    num_items: orderData.lineItems.reduce((sum, i) => sum + i.quantity, 0),
+                    order_id: session.id,
+                }
+            }]
+        };
+
+        console.log('[FB CAPI] Sending Purchase event:', JSON.stringify(eventData, null, 2));
+
+        const response = await fetch(
+            `https://graph.facebook.com/v18.0/${FB_PIXEL_ID}/events?access_token=${FB_ACCESS_TOKEN}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventData)
+            }
+        );
+
+        const result = await response.json();
+
+        if (result.events_received) {
+            console.log('[FB CAPI] ✅ Purchase event sent successfully:', result);
+        } else {
+            console.error('[FB CAPI] ❌ Failed to send event:', result);
+        }
+    } catch (error) {
+        console.error('[FB CAPI] Error sending conversion event:', error.message);
+    }
+}
+
+// ===== GOOGLE ADS OFFLINE CONVERSIONS =====
+/**
+ * Send Purchase conversion to Google Ads (server-side tracking)
+ * Uses Google Ads API for offline conversion uploads
+ */
+async function sendGoogleAdsConversion(session, orderData) {
+    const GOOGLE_ADS_CUSTOMER_ID = process.env.GOOGLE_ADS_CUSTOMER_ID; // Format: 123-456-7890
+    const GOOGLE_ADS_CONVERSION_ACTION_ID = process.env.GOOGLE_ADS_CONVERSION_ACTION_ID;
+    const GOOGLE_ADS_DEVELOPER_TOKEN = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+    const GOOGLE_ADS_REFRESH_TOKEN = process.env.GOOGLE_ADS_REFRESH_TOKEN;
+
+    // For now, we'll use the simpler Measurement Protocol approach
+    // This works with the existing gtag setup
+    const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID || 'G-E1ZPRL98W7';
+    const GA_API_SECRET = process.env.GA_API_SECRET;
+
+    if (!GA_API_SECRET) {
+        console.log('[Google] Missing GA_API_SECRET, skipping server-side tracking');
+        console.log('[Google] To enable: Create API secret in GA4 Admin > Data Streams > Measurement Protocol API secrets');
+        return;
+    }
+
+    try {
+        // Use GA4 Measurement Protocol for server-side events
+        const eventData = {
+            client_id: session.id, // Use session ID as client ID for server-side
+            events: [{
+                name: 'purchase',
+                params: {
+                    transaction_id: session.id,
+                    value: orderData.totalAmount / (orderData.currency === 'OMR' || orderData.currency === 'KWD' || orderData.currency === 'BHD' ? 1000 : 100),
+                    currency: orderData.currency,
+                    items: orderData.lineItems.map(item => ({
+                        item_id: String(item.variantId),
+                        quantity: item.quantity,
+                        price: item.price / (orderData.currency === 'OMR' || orderData.currency === 'KWD' || orderData.currency === 'BHD' ? 1000 : 100),
+                    }))
+                }
+            }]
+        };
+
+        console.log('[Google] Sending purchase event via Measurement Protocol:', JSON.stringify(eventData, null, 2));
+
+        const response = await fetch(
+            `https://www.google-analytics.com/mp/collect?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventData)
+            }
+        );
+
+        // Measurement Protocol returns 204 No Content on success
+        if (response.status === 204 || response.ok) {
+            console.log('[Google] ✅ Purchase event sent successfully');
+        } else {
+            const errorText = await response.text();
+            console.error('[Google] ❌ Failed to send event:', response.status, errorText);
+        }
+    } catch (error) {
+        console.error('[Google] Error sending conversion event:', error.message);
+    }
+}
 
 // Disable body parsing - Stripe requires raw body for signature verification
 module.exports.config = {
@@ -214,6 +355,22 @@ async function handleCheckoutComplete(session) {
         console.log('=== SUCCESS: Shopify order created ===');
         console.log('Order ID:', shopifyOrder.order?.id);
         console.log('Order number:', shopifyOrder.order?.order_number);
+
+        // ===== SERVER-SIDE CONVERSION TRACKING =====
+        // Fire these asynchronously - don't block the response
+        console.log('=== Sending server-side conversion events ===');
+
+        // Facebook Conversions API
+        sendFacebookConversionEvent(fullSession, orderData).catch(err => {
+            console.error('[FB CAPI] Async error:', err.message);
+        });
+
+        // Google Analytics Measurement Protocol
+        sendGoogleAdsConversion(fullSession, orderData).catch(err => {
+            console.error('[Google] Async error:', err.message);
+        });
+
+        console.log('=== Server-side tracking triggered ===');
 
         // ===== UPDATE CUSTOMER WITH MARKETING CONSENT =====
         // Shopify creates the customer from the order, but we need to explicitly update accepts_marketing
