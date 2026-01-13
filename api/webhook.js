@@ -15,76 +15,76 @@ const crypto = require('crypto');
  * Send Purchase event to Facebook Conversions API (server-side tracking)
  * More reliable than browser pixels - works even with ad blockers
  */
-// async function sendFacebookConversionEvent(session, orderData) {
-//     const FB_PIXEL_ID = process.env.FB_PIXEL_ID;
-//     const FB_ACCESS_TOKEN = process.env.FB_CONVERSIONS_API_TOKEN;
+async function sendFacebookConversionEvent(session, orderData) {
+    const FB_PIXEL_ID = process.env.FB_PIXEL_ID;
+    const FB_ACCESS_TOKEN = process.env.FB_CONVERSIONS_API_TOKEN;
 
-//     if (!FB_PIXEL_ID || !FB_ACCESS_TOKEN) {
-//         console.log('[FB CAPI] Missing credentials, skipping server-side tracking');
-//         return;
-//     }
+    if (!FB_PIXEL_ID || !FB_ACCESS_TOKEN) {
+        console.log('[FB CAPI] Missing credentials, skipping server-side tracking');
+        return;
+    }
 
-//     try {
-//         // Hash email for privacy (Facebook requirement)
-//         const hashedEmail = crypto.createHash('sha256')
-//             .update(orderData.customer.email.toLowerCase().trim())
-//             .digest('hex');
+    try {
+        // Hash email for privacy (Facebook requirement)
+        const hashedEmail = crypto.createHash('sha256')
+            .update(orderData.customer.email.toLowerCase().trim())
+            .digest('hex');
 
-//         // Hash phone if available
-//         let hashedPhone = null;
-//         if (orderData.customer.phone) {
-//             // Remove non-numeric characters and hash
-//             const cleanPhone = orderData.customer.phone.replace(/\D/g, '');
-//             hashedPhone = crypto.createHash('sha256')
-//                 .update(cleanPhone)
-//                 .digest('hex');
-//         }
+        // Hash phone if available
+        let hashedPhone = null;
+        if (orderData.customer.phone) {
+            // Remove non-numeric characters and hash
+            const cleanPhone = orderData.customer.phone.replace(/\D/g, '');
+            hashedPhone = crypto.createHash('sha256')
+                .update(cleanPhone)
+                .digest('hex');
+        }
 
-//         const eventData = {
-//             data: [{
-//                 event_name: 'Purchase',
-//                 event_time: Math.floor(Date.now() / 1000),
-//                 event_id: session.id, // Deduplication with browser pixel
-//                 action_source: 'website',
-//                 user_data: {
-//                     em: [hashedEmail],
-//                     ph: hashedPhone ? [hashedPhone] : undefined,
-//                     client_ip_address: session.client_ip || undefined,
-//                     client_user_agent: session.user_agent || undefined,
-//                 },
-//                 custom_data: {
-//                     currency: orderData.currency,
-//                     value: orderData.totalAmount / (orderData.currency === 'OMR' || orderData.currency === 'KWD' || orderData.currency === 'BHD' ? 1000 : 100),
-//                     content_ids: orderData.lineItems.map(i => String(i.variantId)),
-//                     content_type: 'product',
-//                     num_items: orderData.lineItems.reduce((sum, i) => sum + i.quantity, 0),
-//                     order_id: session.id,
-//                 }
-//             }]
-//         };
+        const eventData = {
+            data: [{
+                event_name: 'Purchase',
+                event_time: Math.floor(Date.now() / 1000),
+                event_id: session.id, // Deduplication with browser pixel
+                action_source: 'website',
+                user_data: {
+                    em: [hashedEmail],
+                    ph: hashedPhone ? [hashedPhone] : undefined,
+                    client_ip_address: session.client_ip || undefined,
+                    client_user_agent: session.user_agent || undefined,
+                },
+                custom_data: {
+                    currency: orderData.currency,
+                    value: orderData.totalAmount / (orderData.currency === 'OMR' || orderData.currency === 'KWD' || orderData.currency === 'BHD' ? 1000 : 100),
+                    content_ids: orderData.lineItems.map(i => String(i.variantId)),
+                    content_type: 'product',
+                    num_items: orderData.lineItems.reduce((sum, i) => sum + i.quantity, 0),
+                    order_id: session.id,
+                }
+            }]
+        };
 
-//         console.log('[FB CAPI] Sending Purchase event:', JSON.stringify(eventData, null, 2));
+        console.log('[FB CAPI] Sending Purchase event:', JSON.stringify(eventData, null, 2));
 
-//         const response = await fetch(
-//             `https://graph.facebook.com/v18.0/${FB_PIXEL_ID}/events?access_token=${FB_ACCESS_TOKEN}`,
-//             {
-//                 method: 'POST',
-//                 headers: { 'Content-Type': 'application/json' },
-//                 body: JSON.stringify(eventData)
-//             }
-//         );
+        const response = await fetch(
+            `https://graph.facebook.com/v18.0/${FB_PIXEL_ID}/events?access_token=${FB_ACCESS_TOKEN}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventData)
+            }
+        );
 
-//         const result = await response.json();
+        const result = await response.json();
 
-//         if (result.events_received) {
-//             console.log('[FB CAPI] ✅ Purchase event sent successfully:', result);
-//         } else {
-//             console.error('[FB CAPI] ❌ Failed to send event:', result);
-//         }
-//     } catch (error) {
-//         console.error('[FB CAPI] Error sending conversion event:', error.message);
-//     }
-// }
+        if (result.events_received) {
+            console.log('[FB CAPI] ✅ Purchase event sent successfully:', result);
+        } else {
+            console.error('[FB CAPI] ❌ Failed to send event:', result);
+        }
+    } catch (error) {
+        console.error('[FB CAPI] Error sending conversion event:', error.message);
+    }
+}
 
 // ===== GOOGLE ADS OFFLINE CONVERSIONS =====
 /**
@@ -361,9 +361,9 @@ async function handleCheckoutComplete(session) {
         console.log('=== Sending server-side conversion events ===');
 
         // Facebook Conversions API
-        // sendFacebookConversionEvent(fullSession, orderData).catch(err => {
-        //     console.error('[FB CAPI] Async error:', err.message);
-        // });
+        sendFacebookConversionEvent(fullSession, orderData).catch(err => {
+            console.error('[FB CAPI] Async error:', err.message);
+        });
 
         // Google Analytics Measurement Protocol
         sendGoogleAdsConversion(fullSession, orderData).catch(err => {
