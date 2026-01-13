@@ -361,9 +361,9 @@ async function handleCheckoutComplete(session) {
         console.log('=== Sending server-side conversion events ===');
 
         // Facebook Conversions API
-        sendFacebookConversionEvent(fullSession, orderData).catch(err => {
-            console.error('[FB CAPI] Async error:', err.message);
-        });
+        // sendFacebookConversionEvent(fullSession, orderData).catch(err => {
+        //     console.error('[FB CAPI] Async error:', err.message);
+        // });
 
         // Google Analytics Measurement Protocol
         sendGoogleAdsConversion(fullSession, orderData).catch(err => {
