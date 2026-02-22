@@ -99,7 +99,7 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        const {
+        let {
             cartItems,        // Array of { handle, variantId, title, quantity, price, image }
             currency,         // Selected currency code (USD, EUR, GBP, etc.)
             countryCode,      // Customer's country code for shipping
@@ -114,7 +114,9 @@ module.exports = async function handler(req, res) {
         }
 
         if (!currency || !CURRENCY_CONFIG[currency]) {
-            return res.status(400).json({ error: 'Invalid currency' });
+            // Instead of rejecting, fall back to USD so checkout still works
+            console.warn(`[Checkout] Unsupported currency "${currency}" received. Falling back to USD.`);
+            currency = 'USD';
         }
 
         const currencyLower = currency.toLowerCase();
